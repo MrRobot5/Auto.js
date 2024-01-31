@@ -3,10 +3,15 @@ package org.autojs.autojs.ui.main;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 
+import com.afollestad.materialdialogs.MaterialDialog;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import androidx.core.view.GravityCompat;
@@ -16,6 +21,8 @@ import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.widget.Toolbar;
 import androidx.viewpager.widget.ViewPager;
 
+import android.os.Environment;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -134,7 +141,29 @@ public class MainActivity extends BaseActivity implements OnActivityResultDelega
     }
 
     private void checkPermissions() {
-        checkPermission(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // 先判断有没有权限
+            if (!Environment.isExternalStorageManager()) {
+                ActivityResultLauncher<Intent> launcher = registerForActivityResult(
+                        new ActivityResultContracts.StartActivityForResult(), result -> {
+                            if (Environment.isExternalStorageManager()) {
+                                Explorers.workspace().refreshAll();
+                            }
+                        });
+                new MaterialDialog.Builder(this)
+                        .title(R.string.text_need_manage_all_files_access)
+                        .content(R.string.explain_all_files_access)
+                        .positiveText(R.string.text_go_to_setting)
+                        .negativeText(R.string.text_cancel)
+                        .onPositive((dialog, which) -> {
+                            Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                            intent.setData(Uri.parse("package:" + getApplicationContext().getPackageName()));
+                            launcher.launch(intent);
+                        }).show();
+            }
+        } else {
+            checkPermission(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        }
     }
 
     private void showAccessibilitySettingPromptIfDisabled() {
