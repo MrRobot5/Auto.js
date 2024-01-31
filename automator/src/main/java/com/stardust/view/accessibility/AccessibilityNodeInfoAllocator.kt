@@ -83,8 +83,6 @@ open class AccessibilityNodeInfoAllocator {
             try {
                 key.recycle()
                 notRecycledCount++
-                if (DEBUG)
-                    Log.w(TAG, value)
             } catch (ignored: IllegalStateException) {
             }
 
