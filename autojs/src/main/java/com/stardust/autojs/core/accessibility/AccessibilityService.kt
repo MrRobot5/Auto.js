@@ -1,4 +1,4 @@
-package com.stardust.autojs.core.accessibility
+package com.taobao.idlefish.core.accessibility
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.os.Build

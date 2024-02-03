@@ -5,7 +5,6 @@ import android.content.SharedPreferences;
 import android.util.Log;
 
 import com.stardust.app.GlobalAppContext;
-import org.autojs.autojs.App;
 
 import java.util.HashSet;
 import java.util.LinkedList;
