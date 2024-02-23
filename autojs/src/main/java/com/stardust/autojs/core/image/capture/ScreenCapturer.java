@@ -1,5 +1,6 @@
 package com.stardust.autojs.core.image.capture;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -33,8 +34,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class ScreenCapturer {
 
     public static final int ORIENTATION_AUTO = Configuration.ORIENTATION_UNDEFINED;
-    public static final int ORIENTATION_LANDSCAPE = Configuration.ORIENTATION_LANDSCAPE ;
-    public static final int ORIENTATION_PORTRAIT = Configuration.ORIENTATION_PORTRAIT ;
+    public static final int ORIENTATION_LANDSCAPE = Configuration.ORIENTATION_LANDSCAPE;
+    public static final int ORIENTATION_PORTRAIT = Configuration.ORIENTATION_PORTRAIT;
 
 
     private static final String LOG_TAG = "ScreenCapturer";
@@ -75,7 +76,7 @@ public class ScreenCapturer {
                     mDetectedOrientation = orientation;
                     try {
                         refreshVirtualDisplay(orientation);
-                    }catch (Exception e){
+                    } catch (Exception e) {
                         e.printStackTrace();
                         mException = e;
                     }
@@ -117,6 +118,7 @@ public class ScreenCapturer {
         startAcquireImageLoop();
     }
 
+    @SuppressLint("WrongConstant")
     private void initVirtualDisplay(int width, int height, int screenDensity) {
         mImageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3);
         mVirtualDisplay = mMediaProjection.createVirtualDisplay(LOG_TAG,

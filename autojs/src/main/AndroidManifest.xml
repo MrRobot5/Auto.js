@@ -45,6 +45,11 @@
                 android:resource="@xml/accessibility_service_config"/>
         </service>
 
+        <!-- 截图前台服务 -->
+        <service android:name="com.stardust.autojs.core.image.capture.CaptureForegroundService"
+            android:foregroundServiceType="mediaProjection"
+            android:exported="false"/>
+
     </application>
 
 </manifest>
