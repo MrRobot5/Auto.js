@@ -33,6 +33,7 @@ module.exports = function(runtime, global){
      automator.press = runtime.automator.press.bind(runtime.automator);
      automator.gesture = runtime.automator.gesture.bind(runtime.automator, 0);
      automator.gestureAsync = runtime.automator.gestureAsync.bind(runtime.automator, 0);
+     automator.takeScreenshot = runtime.automator.takeScreenshot.bind(runtime.automator);
      automator.swipe = runtime.automator.swipe.bind(runtime.automator);
      automator.gestures  = function(){
         return runtime.automator.gestures(toStrokes(arguments));

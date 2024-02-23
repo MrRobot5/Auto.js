@@ -3,6 +3,7 @@ package com.stardust.autojs;
 import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
+import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 
@@ -14,6 +15,7 @@ import com.stardust.app.SimpleActivityLifecycleCallbacks;
 import com.stardust.autojs.core.accessibility.AccessibilityBridge;
 import com.stardust.autojs.core.console.GlobalConsole;
 import com.stardust.autojs.core.console.ConsoleImpl;
+import com.stardust.autojs.core.image.capture.CaptureForegroundService;
 import com.stardust.autojs.core.image.capture.ScreenCaptureRequestActivity;
 import com.stardust.autojs.core.image.capture.ScreenCaptureRequester;
 import com.stardust.autojs.core.record.accessibility.AccessibilityActionRecorder;
@@ -254,6 +256,9 @@ public abstract class AutoJs {
         @Override
         public void request() {
             Activity activity = mAppUtils.getCurrentActivity();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                mContext.startForegroundService(new Intent(mContext, CaptureForegroundService.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            }
             if (activity instanceof OnActivityResultDelegate.DelegateHost) {
                 ScreenCaptureRequester requester = new ActivityScreenCaptureRequester(
                         ((OnActivityResultDelegate.DelegateHost) activity).getOnActivityResultDelegateMediator(), activity);
