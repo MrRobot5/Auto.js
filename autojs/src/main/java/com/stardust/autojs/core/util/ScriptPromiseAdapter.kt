@@ -1,6 +1,6 @@
 package com.stardust.autojs.core.util
 
-import com.stardust.autojs.core.internal.Functions
+import com.stardust.concurrent.VolatileDispose
 
 class ScriptPromiseAdapter {
 
@@ -12,6 +12,7 @@ class ScriptPromiseAdapter {
     private var mRejectCallback: Callback? = null
     private var mResult: Any? = UNSET
     private var mError: Any? = UNSET
+    private var volatileDispose = VolatileDispose<Boolean>();
 
     fun onResolve(callback: Callback): ScriptPromiseAdapter {
         mResolveCallback = callback
@@ -20,7 +21,12 @@ class ScriptPromiseAdapter {
                 callback.call(it)
             }
         }
+        volatileDispose.setAndNotify(true)
         return this
+    }
+
+    fun awaitResolver() {
+        volatileDispose.blockedGet()
     }
 
     fun onReject(callback: Callback): ScriptPromiseAdapter {

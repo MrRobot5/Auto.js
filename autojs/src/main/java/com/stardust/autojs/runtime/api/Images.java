@@ -11,9 +11,6 @@ import android.media.Image;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-
-import androidx.annotation.RequiresApi;
-
 import android.util.Base64;
 import android.view.Gravity;
 
@@ -21,8 +18,8 @@ import com.stardust.autojs.annotation.ScriptVariable;
 import com.stardust.autojs.core.image.ColorFinder;
 import com.stardust.autojs.core.image.ImageWrapper;
 import com.stardust.autojs.core.image.TemplateMatching;
+import com.stardust.autojs.core.image.capture.GlobalScreenCapture;
 import com.stardust.autojs.core.image.capture.ScreenCaptureRequester;
-import com.stardust.autojs.core.image.capture.ScreenCapturer;
 import com.stardust.autojs.core.opencv.Mat;
 import com.stardust.autojs.core.opencv.OpenCVHelper;
 import com.stardust.autojs.core.ui.inflater.util.Drawables;
@@ -41,12 +38,13 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.ref.WeakReference;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
+
+import androidx.annotation.RequiresApi;
 
 /**
  * Created by Stardust on 2017/5/20.
@@ -54,9 +52,8 @@ import java.util.List;
 @RequiresApi(api = Build.VERSION_CODES.KITKAT)
 public class Images {
 
-    private ScriptRuntime mScriptRuntime;
+    private WeakReference<ScriptRuntime> mScriptRuntime;
     private ScreenCaptureRequester mScreenCaptureRequester;
-    private ScreenCapturer mScreenCapturer;
     private Context mContext;
     private Image mPreCapture;
     private ImageWrapper mPreCaptureImage;
@@ -67,10 +64,10 @@ public class Images {
     public final ColorFinder colorFinder;
 
     public Images(Context context, ScriptRuntime scriptRuntime, ScreenCaptureRequester screenCaptureRequester) {
-        mScriptRuntime = scriptRuntime;
+        mScriptRuntime = new WeakReference<>(scriptRuntime);
         mScreenCaptureRequester = screenCaptureRequester;
         mContext = context;
-        mScreenMetrics = mScriptRuntime.getScreenMetrics();
+        mScreenMetrics = scriptRuntime.getScreenMetrics();
         colorFinder = new ColorFinder(mScreenMetrics);
     }
 
@@ -78,16 +75,24 @@ public class Images {
     public ScriptPromiseAdapter requestScreenCapture(int orientation) {
         ScriptRuntime.requiresApi(21);
         ScriptPromiseAdapter promiseAdapter = new ScriptPromiseAdapter();
-        if (mScreenCapturer != null) {
-            mScreenCapturer.setOrientation(orientation);
-            promiseAdapter.resolve(true);
-            return promiseAdapter;
+        if (GlobalScreenCapture.getInstance().hasPermission()) {
+            synchronized (GlobalScreenCapture.getInstance()) {
+                if (GlobalScreenCapture.getInstance().hasPermission()) {
+                    GlobalScreenCapture.getInstance().setOrientation(orientation);
+                    GlobalScreenCapture.getInstance().register(mScriptRuntime.get());
+                    new Thread(() -> {
+                        promiseAdapter.awaitResolver();
+                        new Handler(Looper.getMainLooper()).postDelayed(() -> promiseAdapter.resolve(true), 50);
+                    }).start();
+                    return promiseAdapter;
+                }
+            }
         }
-        Looper servantLooper = mScriptRuntime.loopers.getServantLooper();
+
         mScreenCaptureRequester.setOnActivityResultCallback((result, data) -> {
             if (result == Activity.RESULT_OK) {
-                mScreenCapturer = new ScreenCapturer(mContext, data, orientation, ScreenMetrics.getDeviceScreenDensity(),
-                        new Handler(servantLooper));
+                GlobalScreenCapture.getInstance().initCapture(mContext, data, orientation);
+                GlobalScreenCapture.getInstance().register(mScriptRuntime.get());
                 promiseAdapter.resolve(true);
             } else {
                 promiseAdapter.resolve(false);
@@ -100,10 +105,10 @@ public class Images {
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public synchronized ImageWrapper captureScreen() {
         ScriptRuntime.requiresApi(21);
-        if (mScreenCapturer == null) {
+        if (!GlobalScreenCapture.getInstance().hasPermission()) {
             throw new SecurityException("No screen capture permission");
         }
-        Image capture = mScreenCapturer.capture();
+        Image capture = GlobalScreenCapture.getInstance().capture();
         if (capture == mPreCapture && mPreCaptureImage != null) {
             return mPreCaptureImage;
         }
@@ -117,7 +122,7 @@ public class Images {
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public boolean captureScreen(String path) {
-        path = mScriptRuntime.files.path(path);
+        path = mScriptRuntime.get().files.path(path);
         ImageWrapper image = captureScreen();
         if (image != null) {
             image.saveTo(path);
@@ -135,7 +140,7 @@ public class Images {
         if (compressFormat == null)
             throw new IllegalArgumentException("unknown format " + format);
         Bitmap bitmap = image.getBitmap();
-        FileOutputStream outputStream = new FileOutputStream(mScriptRuntime.files.path(path));
+        FileOutputStream outputStream = new FileOutputStream(mScriptRuntime.get().files.path(path));
         return bitmap.compress(compressFormat, quality, outputStream);
     }
 
@@ -188,7 +193,7 @@ public class Images {
     }
 
     public ImageWrapper read(String path) {
-        path = mScriptRuntime.files.path(path);
+        path = mScriptRuntime.get().files.path(path);
         Bitmap bitmap = BitmapFactory.decodeFile(path);
         return ImageWrapper.ofBitmap(bitmap);
     }
@@ -264,8 +269,10 @@ public class Images {
     }
 
     public void releaseScreenCapturer() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && mScreenCapturer != null) {
-            mScreenCapturer.release();
+        if (GlobalScreenCapture.getInstance().hasPermission()) {
+            synchronized (GlobalScreenCapture.getInstance()) {
+                GlobalScreenCapture.getInstance().unregister(mScriptRuntime.get());
+            }
         }
     }
 
@@ -346,23 +353,27 @@ public class Images {
         if (mOpenCvInitialized || OpenCVHelper.isInitialized()) {
             return;
         }
-        Activity currentActivity = mScriptRuntime.app.getCurrentActivity();
+        Activity currentActivity = mScriptRuntime.get().app.getCurrentActivity();
         Context context = currentActivity == null ? mContext : currentActivity;
-        mScriptRuntime.console.info("opencv initializing");
+        mScriptRuntime.get().console.info("opencv initializing");
         if (Looper.myLooper() == Looper.getMainLooper()) {
             OpenCVHelper.initIfNeeded(context, () -> {
                 mOpenCvInitialized = true;
-                mScriptRuntime.console.info("opencv initialized");
+                mScriptRuntime.get().console.info("opencv initialized");
             });
         } else {
             VolatileDispose<Boolean> result = new VolatileDispose<>();
             OpenCVHelper.initIfNeeded(context, () -> {
                 mOpenCvInitialized = true;
                 result.setAndNotify(true);
-                mScriptRuntime.console.info("opencv initialized");
+                mScriptRuntime.get().console.info("opencv initialized");
             });
             result.blockedGet();
         }
 
+    }
+
+    public void recycle() {
+        mScreenCaptureRequester.recycle();
     }
 }
